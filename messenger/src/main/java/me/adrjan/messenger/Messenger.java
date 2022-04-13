@@ -75,10 +75,8 @@ public class Messenger {
         PacketHandler destiny = method.getAnnotation(PacketHandler.class);
         if (!destiny.channel().isEmpty())
             return Optional.of(destiny.channel());
-
         if (parameter.isAnnotationPresent(PacketChannel.class))
             return Optional.of(parameter.getAnnotation(PacketChannel.class).channel());
-
         return Optional.empty();
     }
 }
