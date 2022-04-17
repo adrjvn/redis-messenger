@@ -71,6 +71,20 @@ public class Messenger {
         this.packetListenerCache.remove(packetListenerClazz);
     }
 
+    public void unregisterListenerByPacket(Class<? extends Packet> packetClazz) {
+        List<PacketListenerWrapper> toRemove = new ArrayList<>();
+        this.packetListenerCache.values().forEach(set -> {
+            set.stream()
+                    .filter(handler -> handler.getType().isAssignableFrom(packetClazz))
+                    .forEach(packetListenerWrapper -> {
+                        this.redissonClient.getTopic(packetListenerWrapper.getChannel()).removeListener(packetListenerWrapper);
+                        toRemove.add(packetListenerWrapper);
+                        //System.out.println("Unregistered PacketListener -> Channel: " + packetListenerWrapper.getChannel() + " Packet: " + packetListenerWrapper.getType().getSimpleName());
+                    });
+            toRemove.forEach(set::remove);
+        });
+    }
+
     protected Optional<String> resolveListenerChannel(Method method, Class<? extends Packet> parameter) {
         PacketHandler destiny = method.getAnnotation(PacketHandler.class);
         if (!destiny.channel().isEmpty())
