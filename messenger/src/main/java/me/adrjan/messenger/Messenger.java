@@ -35,12 +35,22 @@ public class Messenger {
         this.redissonClient = Redisson.create(redisConfig);
     }
 
+    public void publish(Packet packet) {
+        this.publish(false, packet);
+    }
+
+    public void publish(boolean async, Packet packet) {
+        if (packet.getClass().isAnnotationPresent(PacketChannel.class)) return;
+        this.publish(packet.getClass().getAnnotation(PacketChannel.class).channel(), async, packet);
+    }
+
     public void publish(String channel, Packet packet) {
         this.publish(channel, false, packet);
     }
 
     public void publish(String channel, boolean async, Packet packet) {
         packet.setClientSender(this.client);
+        channel = channel.equalsIgnoreCase("self") ? this.client : channel;
         if (async) this.redissonClient.getTopic(channel).publishAsync(packet);
         else this.redissonClient.getTopic(channel).publish(packet);
     }
