@@ -35,12 +35,15 @@ public class Messenger {
         this.redissonClient = Redisson.create(redisConfig);
     }
 
+    //Packet class must contains PacketChannel annotation
     public void publish(Packet packet) {
         this.publish(false, packet);
     }
 
+    //Packet class must contains PacketChannel annotation
     public void publish(boolean async, Packet packet) {
-        if (packet.getClass().isAnnotationPresent(PacketChannel.class)) return;
+        if (packet.getClass().isAnnotationPresent(PacketChannel.class))
+            throw new RuntimeException("Packet class " + packet.getClass().getSimpleName() + " does not contains PacketChannel annotation!");
         this.publish(packet.getClass().getAnnotation(PacketChannel.class).channel(), async, packet);
     }
 

@@ -18,7 +18,9 @@ public class Example {
 
         this.messenger.publish(this.messenger.getClient(), new ExamplePacket(2137));
         this.messenger.publish("cj", new ExampleAnnotationPacket("example"));
+        this.messenger.publish(new ExampleAnnotationPacket("B)"));
 
         this.messenger.unregisterListenerByPacket(ExamplePacket.class);
+        this.messenger.unregisterListener(ExampleListener.class);
     }
 }
