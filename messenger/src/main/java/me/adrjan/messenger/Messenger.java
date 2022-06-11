@@ -13,6 +13,7 @@ import org.redisson.config.Config;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 public class Messenger {
 
@@ -21,6 +22,8 @@ public class Messenger {
     private final RedissonClient redissonClient;
 
     protected final Map<Class<? extends PacketListener>, Set<PacketListenerWrapper>> packetListenerCache = new ConcurrentHashMap<>();
+
+    private Consumer<Runnable> asyncExercutor;
 
     public Messenger(String client, String redisURL) {
         this.client = client;
@@ -35,6 +38,11 @@ public class Messenger {
         this.redissonClient = Redisson.create(redisConfig);
     }
 
+    public Messenger withCustomAsyncExecutor(Consumer<Runnable> executor) {
+        this.asyncExercutor = executor;
+        return this;
+    }
+
     //Packet class must contains PacketChannel annotation
     public void publish(Packet packet) {
         this.publish(false, packet);
@@ -42,7 +50,7 @@ public class Messenger {
 
     //Packet class must contains PacketChannel annotation
     public void publish(boolean async, Packet packet) {
-        if (packet.getClass().isAnnotationPresent(PacketChannel.class))
+        if (!packet.getClass().isAnnotationPresent(PacketChannel.class))
             throw new RuntimeException("Packet class " + packet.getClass().getSimpleName() + " does not contains PacketChannel annotation!");
         this.publish(packet.getClass().getAnnotation(PacketChannel.class).channel(), async, packet);
     }
@@ -53,9 +61,15 @@ public class Messenger {
 
     public void publish(String channel, boolean async, Packet packet) {
         packet.setClientSender(this.client);
-        channel = channel.equalsIgnoreCase("self") ? this.client : channel;
-        if (async) this.redissonClient.getTopic(channel).publishAsync(packet);
-        else this.redissonClient.getTopic(channel).publish(packet);
+        final String ch = channel.equalsIgnoreCase("self") ? this.client : channel;
+        if (!async) {
+            this.redissonClient.getTopic(ch).publish(packet);
+            return;
+        }
+        if (asyncExercutor == null)
+            this.redissonClient.getTopic(ch).publishAsync(packet);
+        else
+            this.asyncExercutor.accept(() -> this.redissonClient.getTopic(ch).publish(packet));
     }
 
     public void registerListener(PacketListener packetListener) {
