@@ -10,4 +10,6 @@ import java.lang.annotation.Target;
 public @interface PacketHandler {
 
     String channel() default "";
+
+    boolean sync() default false;
 }

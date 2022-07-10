@@ -7,7 +7,9 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
-public @interface PacketChannel {
+public @interface PacketInfo {
 
     String channel();
+
+    boolean async() default false;
 }

@@ -2,7 +2,7 @@ package me.adrjan.messenger;
 
 import lombok.Getter;
 import me.adrjan.messenger.packet.Packet;
-import me.adrjan.messenger.packet.PacketChannel;
+import me.adrjan.messenger.packet.PacketInfo;
 import me.adrjan.messenger.packet.listener.PacketHandler;
 import me.adrjan.messenger.packet.listener.PacketListener;
 import me.adrjan.messenger.packet.listener.PacketListenerWrapper;
@@ -24,6 +24,7 @@ public class Messenger {
     protected final Map<Class<? extends PacketListener>, Set<PacketListenerWrapper>> packetListenerCache = new ConcurrentHashMap<>();
 
     private Consumer<Runnable> asyncExercutor;
+    private Consumer<Runnable> syncExecutor = null;
 
     public Messenger(String client, String redisURL) {
         this.client = client;
@@ -43,16 +44,25 @@ public class Messenger {
         return this;
     }
 
-    //Packet class must contains PacketChannel annotation
-    public void publish(Packet packet) {
-        this.publish(false, packet);
+    public Messenger withSyncExecutor(Consumer<Runnable> executor) {
+        this.syncExecutor = executor;
+        return this;
     }
 
-    //Packet class must contains PacketChannel annotation
+    //Packet class must contains PacketInfo annotation
+    public void publish(Packet packet) {
+        if (!packet.getClass().isAnnotationPresent(PacketInfo.class))
+            throw new RuntimeException("Packet class " + packet.getClass().getSimpleName() + " does not contains PacketInfo annotation!");
+        PacketInfo packetInfo = packet.getClass().getAnnotation(PacketInfo.class);
+        this.publish(packetInfo.channel(), packetInfo.async(), packet);
+    }
+
+    //Packet class must contains PacketInfo annotatio
     public void publish(boolean async, Packet packet) {
-        if (!packet.getClass().isAnnotationPresent(PacketChannel.class))
-            throw new RuntimeException("Packet class " + packet.getClass().getSimpleName() + " does not contains PacketChannel annotation!");
-        this.publish(packet.getClass().getAnnotation(PacketChannel.class).channel(), async, packet);
+        if (!packet.getClass().isAnnotationPresent(PacketInfo.class))
+            throw new RuntimeException("Packet class " + packet.getClass().getSimpleName() + " does not contains PacketInfo annotation!");
+        PacketInfo packetInfo = packet.getClass().getAnnotation(PacketInfo.class);
+        this.publish(packetInfo.channel(), async, packet);
     }
 
     public void publish(String channel, Packet packet) {
@@ -66,10 +76,8 @@ public class Messenger {
             this.redissonClient.getTopic(ch).publish(packet);
             return;
         }
-        if (asyncExercutor == null)
-            this.redissonClient.getTopic(ch).publishAsync(packet);
-        else
-            this.asyncExercutor.accept(() -> this.redissonClient.getTopic(ch).publish(packet));
+        if (asyncExercutor == null) this.redissonClient.getTopic(ch).publishAsync(packet);
+        else this.asyncExercutor.accept(() -> this.redissonClient.getTopic(ch).publish(packet));
     }
 
     public void registerListener(PacketListener packetListener) {
@@ -78,13 +86,13 @@ public class Messenger {
                 .filter(method -> method.getParameterCount() == 1)
                 .filter(method -> Packet.class.isAssignableFrom(method.getParameterTypes()[0]))
                 .forEach(method -> {
+                    PacketHandler packetHandler = method.getAnnotation(PacketHandler.class);
                     Class<? extends Packet> packetParameter = (Class<? extends Packet>) method.getParameterTypes()[0];
-                    Optional<String> optionalChannel = resolveListenerChannel(method, packetParameter);
+                    Optional<String> optionalChannel = resolveListenerChannel(packetHandler, packetParameter);
                     if (optionalChannel.isEmpty()) return;
                     String channel = optionalChannel.get().equalsIgnoreCase("self") ? this.client : optionalChannel.get();
-                    PacketListenerWrapper packetListenerWrapper = new PacketListenerWrapper(channel, packetListener, packetParameter, method);
-                    this.redissonClient.getTopic(channel).addListener(Packet.class,
-                            packetListenerWrapper);
+                    PacketListenerWrapper packetListenerWrapper = new PacketListenerWrapper(channel, packetListener, packetParameter, method, packetHandler.sync(), this.syncExecutor);
+                    this.redissonClient.getTopic(channel).addListener(Packet.class, packetListenerWrapper);
                     this.packetListenerCache.computeIfAbsent(packetListener.getClass(), set -> new HashSet<>()).add(packetListenerWrapper);
                     //System.out.println("Registered PacketListener -> " + packetListener.getClass().getSimpleName() + " -> " + method.getName() + " -> Channel: " + channel + " Packet: " + packetParameter.getSimpleName());
                 });
@@ -112,12 +120,11 @@ public class Messenger {
         });
     }
 
-    protected Optional<String> resolveListenerChannel(Method method, Class<? extends Packet> parameter) {
-        PacketHandler destiny = method.getAnnotation(PacketHandler.class);
+    protected Optional<String> resolveListenerChannel(PacketHandler destiny, Class<? extends Packet> parameter) {
         if (!destiny.channel().isEmpty())
             return Optional.of(destiny.channel());
-        if (parameter.isAnnotationPresent(PacketChannel.class))
-            return Optional.of(parameter.getAnnotation(PacketChannel.class).channel());
+        if (parameter.isAnnotationPresent(PacketInfo.class))
+            return Optional.of(parameter.getAnnotation(PacketInfo.class).channel());
         return Optional.empty();
     }
 }

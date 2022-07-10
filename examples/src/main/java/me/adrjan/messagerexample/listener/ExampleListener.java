@@ -7,13 +7,13 @@ import me.adrjan.messenger.packet.listener.PacketListener;
 
 public class ExampleListener implements PacketListener {
 
-    @PacketHandler(channel = "self")
+    @PacketHandler(channel = "self", sync = true)
     public void onExamplePacket(ExamplePacket packet) {
         System.out.println(packet.getAmount());
     }
 
     @PacketHandler
-    public void onExampleAnnotationPacket(ExampleAnnotationPacket packet){
+    public void onExampleAnnotationPacket(ExampleAnnotationPacket packet) {
         System.out.println(packet.getMessage());
     }
 }
