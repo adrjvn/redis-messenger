@@ -10,9 +10,9 @@ import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class Messenger {
@@ -24,7 +24,7 @@ public class Messenger {
     protected final Map<Class<? extends PacketListener>, Set<PacketListenerWrapper>> packetListenerCache = new ConcurrentHashMap<>();
 
     private Consumer<Runnable> asyncExercutor;
-    private Consumer<Runnable> syncExecutor = null;
+    private Consumer<Runnable> syncExecutor;
 
     public Messenger(String client, String redisURL) {
         this.client = client;
@@ -65,10 +65,6 @@ public class Messenger {
         this.publish(packetInfo.channel(), async, packet);
     }
 
-    public void publish(String channel, Packet packet) {
-        this.publish(channel, false, packet);
-    }
-
     public void publish(String channel, boolean async, Packet packet) {
         packet.setClientSender(this.client);
         final String ch = channel.equalsIgnoreCase("self") ? this.client : channel;
@@ -78,6 +74,10 @@ public class Messenger {
         }
         if (asyncExercutor == null) this.redissonClient.getTopic(ch).publishAsync(packet);
         else this.asyncExercutor.accept(() -> this.redissonClient.getTopic(ch).publish(packet));
+    }
+
+    public void registerListeners(PacketListener... listeners) {
+        Arrays.stream(listeners).forEach(this::registerListener);
     }
 
     public void registerListener(PacketListener packetListener) {
@@ -91,7 +91,7 @@ public class Messenger {
                     Optional<String> optionalChannel = resolveListenerChannel(packetHandler, packetParameter);
                     if (optionalChannel.isEmpty()) return;
                     String channel = optionalChannel.get().equalsIgnoreCase("self") ? this.client : optionalChannel.get();
-                    PacketListenerWrapper packetListenerWrapper = new PacketListenerWrapper(channel, packetListener, packetParameter, method, packetHandler.sync(), this.syncExecutor);
+                    PacketListenerWrapper packetListenerWrapper = new PacketListenerWrapper(channel, packetListener, packetParameter, method, packetHandler.handleSync() ? this.syncExecutor : null);
                     this.redissonClient.getTopic(channel).addListener(Packet.class, packetListenerWrapper);
                     this.packetListenerCache.computeIfAbsent(packetListener.getClass(), set -> new HashSet<>()).add(packetListenerWrapper);
                     //System.out.println("Registered PacketListener -> " + packetListener.getClass().getSimpleName() + " -> " + method.getName() + " -> Channel: " + channel + " Packet: " + packetParameter.getSimpleName());
@@ -118,6 +118,15 @@ public class Messenger {
                     });
             toRemove.forEach(set::remove);
         });
+    }
+
+    public void shutdown() {
+        this.shoutdown(0, 2, TimeUnit.SECONDS);
+    }
+
+    public void shoutdown(long quietPeriod, long timeout, TimeUnit unit) {
+        this.packetListenerCache.clear();
+        this.redissonClient.shutdown(quietPeriod, timeout, unit);
     }
 
     protected Optional<String> resolveListenerChannel(PacketHandler destiny, Class<? extends Packet> parameter) {

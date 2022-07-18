@@ -11,5 +11,5 @@ public @interface PacketHandler {
 
     String channel() default "";
 
-    boolean sync() default false;
+    boolean handleSync() default false;
 }

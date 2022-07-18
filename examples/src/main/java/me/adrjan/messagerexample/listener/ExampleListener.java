@@ -7,7 +7,7 @@ import me.adrjan.messenger.packet.listener.PacketListener;
 
 public class ExampleListener implements PacketListener {
 
-    @PacketHandler(channel = "self", sync = true)
+    @PacketHandler(channel = "self", handleSync = true)
     public void onExamplePacket(ExamplePacket packet) {
         System.out.println(packet.getAmount());
     }
