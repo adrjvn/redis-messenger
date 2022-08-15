@@ -103,8 +103,8 @@ public class Messenger {
     public <T> void registerHandler(String channel, Class<T> packet, Consumer<T> consumer) {
         if (!(Packet.class.isAssignableFrom(packet)))
             throw new RuntimeException("Wrong class.");
-        MessageListener<T> listener = (charSequence, msg) -> consumer.accept(msg);
-        this.redissonClient.getTopic(channel).addListener(packet, listener);
+        this.redissonClient.getTopic(channel).addListener(packet,
+                (charSequence, msg) -> consumer.accept(msg));
     }
 
     public <T> void registerHandler(Class<T> packet, Consumer<T> consumer) {
