@@ -8,8 +8,10 @@ import me.adrjan.messenger.packet.listener.PacketListener;
 import me.adrjan.messenger.packet.listener.PacketListenerWrapper;
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
+import org.redisson.api.listener.MessageListener;
 import org.redisson.config.Config;
 
+import java.lang.reflect.Type;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -96,6 +98,20 @@ public class Messenger {
                     this.packetListenerCache.computeIfAbsent(packetListener.getClass(), set -> new HashSet<>()).add(packetListenerWrapper);
                     //System.out.println("Registered PacketListener -> " + packetListener.getClass().getSimpleName() + " -> " + method.getName() + " -> Channel: " + channel + " Packet: " + packetParameter.getSimpleName());
                 });
+    }
+
+    public <T> void registerHandler(String channel, Class<T> packet, Consumer<T> consumer) {
+        if (!(Packet.class.isAssignableFrom(packet)))
+            throw new RuntimeException("Wrong class.");
+        MessageListener<T> listener = (charSequence, msg) -> consumer.accept(msg);
+        this.redissonClient.getTopic(channel).addListener(packet, listener);
+    }
+
+    public <T> void registerHandler(Class<T> packet, Consumer<T> consumer) {
+        if (!packet.isAnnotationPresent(PacketInfo.class))
+            throw new RuntimeException("Packet class " + packet.getSimpleName() + " does not contains PacketInfo annotation!");
+        PacketInfo packetInfo = packet.getAnnotation(PacketInfo.class);
+        registerHandler(packetInfo.channel(), packet, consumer);
     }
 
     public void unregisterListener(Class<? extends PacketListener> packetListenerClazz) {

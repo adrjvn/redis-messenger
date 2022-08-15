@@ -27,5 +27,8 @@ public class Example {
 
         this.messenger.unregisterListenerByPacket(ExamplePacket.class);
         this.messenger.unregisterListener(ExampleListener.class);
+
+        this.messenger.registerHandler(ExampleAnnotationPacket.class, exampleAnnotationPacket -> System.out.println(exampleAnnotationPacket.getMessage()));
+        this.messenger.publish(new ExampleAnnotationPacket("wjadomość :)"));
     }
 }
