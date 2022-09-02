@@ -27,16 +27,14 @@ public class ExampleBootstrap {
 
         public void enable() {
             this.messenger.registerListener(new ExampleListener());
+            this.messenger.registerHandler(ExampleAnnotationPacket.class, exampleAnnotationPacket -> System.out.println(exampleAnnotationPacket.getMessage() + " OOOO"));
 
             this.messenger.publish(this.messenger.getClient(), false, new ExamplePacket(2137));
             this.messenger.publish(true, new ExampleAnnotationPacket("B)"));
-            this.messenger.publish(new ExampleAnnotationPacket("B)"));
+            this.messenger.publish(new ExampleAnnotationPacket(":)"));
 
-            this.messenger.unregisterListenerByPacket(ExamplePacket.class);
-            this.messenger.unregisterListener(ExampleListener.class);
-
-            this.messenger.registerHandler(ExampleAnnotationPacket.class, exampleAnnotationPacket -> System.out.println(exampleAnnotationPacket.getMessage()));
-            this.messenger.publish(new ExampleAnnotationPacket("wjadomość :)"));
+            //this.messenger.unregisterListenerByPacket(ExamplePacket.class);
+            //this.messenger.unregisterListener(ExampleListener.class);
         }
     }
 

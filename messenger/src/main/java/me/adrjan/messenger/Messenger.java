@@ -69,7 +69,7 @@ public class Messenger {
 
     public void publish(String channel, boolean async, Packet packet) {
         packet.setClientSender(this.client);
-        final String ch = channel.equalsIgnoreCase("self") ? this.client : channel;
+        final String ch = solveChannel(channel);
         if (!async) {
             this.redissonClient.getTopic(ch).publish(packet);
             return;
@@ -103,7 +103,7 @@ public class Messenger {
     public <T> void registerHandler(String channel, Class<T> packet, Consumer<T> consumer) {
         if (!(Packet.class.isAssignableFrom(packet)))
             throw new RuntimeException("Wrong class.");
-        this.redissonClient.getTopic(channel).addListener(packet,
+        this.redissonClient.getTopic(solveChannel(channel)).addListener(packet,
                 (charSequence, msg) -> consumer.accept(msg));
     }
 
@@ -111,12 +111,12 @@ public class Messenger {
         if (!packet.isAnnotationPresent(PacketInfo.class))
             throw new RuntimeException("Packet class " + packet.getSimpleName() + " does not contains PacketInfo annotation!");
         PacketInfo packetInfo = packet.getAnnotation(PacketInfo.class);
-        registerHandler(packetInfo.channel(), packet, consumer);
+        registerHandler(solveChannel(packetInfo.channel()), packet, consumer);
     }
 
     public void unregisterListener(Class<? extends PacketListener> packetListenerClazz) {
         this.packetListenerCache.get(packetListenerClazz).forEach(packetListenerWrapper -> {
-            this.redissonClient.getTopic(packetListenerWrapper.getChannel()).removeListener(packetListenerWrapper);
+            this.redissonClient.getTopic(solveChannel(packetListenerWrapper.getChannel())).removeListener(packetListenerWrapper);
             //System.out.println("Unregistered PacketListener -> " + packetListenerClazz.getSimpleName() + " -> Channel: " + packetListenerWrapper.getChannel() + " Packet: " + packetListenerWrapper.getType().getSimpleName());
         });
         this.packetListenerCache.remove(packetListenerClazz);
@@ -128,7 +128,7 @@ public class Messenger {
             set.stream()
                     .filter(handler -> handler.getType().isAssignableFrom(packetClazz))
                     .forEach(packetListenerWrapper -> {
-                        this.redissonClient.getTopic(packetListenerWrapper.getChannel()).removeListener(packetListenerWrapper);
+                        this.redissonClient.getTopic(solveChannel(packetListenerWrapper.getChannel())).removeListener(packetListenerWrapper);
                         toRemove.add(packetListenerWrapper);
                         //System.out.println("Unregistered PacketListener -> Channel: " + packetListenerWrapper.getChannel() + " Packet: " + packetListenerWrapper.getType().getSimpleName());
                     });
@@ -151,5 +151,9 @@ public class Messenger {
         if (parameter.isAnnotationPresent(PacketInfo.class))
             return Optional.of(parameter.getAnnotation(PacketInfo.class).channel());
         return Optional.empty();
+    }
+
+    private String solveChannel(String channel){
+        return channel.equalsIgnoreCase("self") ? this.client : channel;
     }
 }
